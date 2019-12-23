@@ -18,6 +18,7 @@ from munkres import make_cost_matrix
 import joblib
 from collections import Counter
 from community.community_louvain import best_partition
+from nltk.metrics.segmentation import pk, windowdiff
 
 
 punct = punctuation+'«»—…“”*–'
@@ -353,3 +354,26 @@ def segmentize_by_clustering(path_to_text, model):
     pred_paragraphs = [sents[block[0]:block[-1]+1] for block in pred_segment_indices]
     
     return sents, real_paragraphs, pred_segment_indices, pred_paragraphs
+
+
+def evaluate(gold_idx, pred_idx, k):
+    """
+    gold_idx: golden standart of segmentation in the following format: list of lists of indexes
+    pred_idx: predicted segmentation of the text in the following format: list of lists of indexes
+    k: window size (preferrably half of the document length divided by the number of gold segments)
+    return: pk (Beeferman D., Berger A., Lafferty J. (1999)) and windowdiff (Pevzner, L., and Hearst, M (2002)) 
+    metrics for the prediction (less the better)
+    """
+    gold_idx = [[str(0) for i in j] for j in gold_idx]
+    gold = []
+    for i in gold_idx:
+        i[-1] = "1"
+        gold.extend(i)
+    gold = "".join(gold)
+    pred_idx = [[str(0) for i in j] for j in pred_idx]
+    pred = []
+    for i in pred_idx:
+        i[-1] = "1"
+        pred.extend(i)
+    pred = "".join(pred)
+    return {'pk': pk(gold, pred, k), 'windowdiff': windowdiff(gold, pred, k)}
