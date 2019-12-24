@@ -377,3 +377,15 @@ def evaluate(gold_idx, pred_idx, k):
         pred.extend(i)
     pred = "".join(pred)
     return {'pk': pk(gold, pred, k), 'windowdiff': windowdiff(gold, pred, k)}
+
+
+def gold_segment_indices(real_paragraphs):
+    gold_idx = []
+    count = 0
+    for element in real_paragraphs:
+        para = []
+        for el in element:
+            para.append(count)
+            count += 1
+        gold_idx.append(para)
+    return gold_idx
