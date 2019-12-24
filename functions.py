@@ -149,23 +149,27 @@ def sr_scores(aligned_sents, model, freq_sums):
     return sr_scores    
 
 
-def get_segments(tau, sent_indexes, sr_dict):
+def get_segments(tau, sent_indexes, sr_dict, wmd = False):
     
     """returns list of segments containing sentence indexes given their semantic relatedness scores"""
     
     # constructing the similarity graph
     G = nx.Graph()
     G.add_nodes_from(sent_indexes)
-    for pair in sr_dict.keys():
-        if sr_dict[pair] > tau:
-            G.add_edge(pair[0], pair[1])
+    
+    if wmd == True:
+        for pair in sr_dict.keys():
+            if sr_dict[pair] < tau:
+                G.add_edge(pair[0], pair[1])
+    else:
+        for pair in sr_dict.keys():
+            if sr_dict[pair] > tau:
+                G.add_edge(pair[0], pair[1])
             
     # get sorted subgraphs        
     subgraphs = sorted([sorted(list(i)) for i in list(nx.connected_components(G))])
-    # preds = [sents[block[0]:block[-1]+1] for block in graphs]
     
     # merging standalone segments if they go one after another
-    
     segments = []
     cur_list = []
     
@@ -198,11 +202,7 @@ def get_segments(tau, sent_indexes, sr_dict):
     return sorted(segments)
 
 
-def segmentize_bipartite_subgraphs(path_to_text, model, tau):
-    
-#    freq_dict = read_freqs("1grams-3.txt")
-#    freqs = freq_sums(freq_dict, morph=Mystem())
-    freqs = joblib.load("freqs.pkl")
+def segmentize_bipartite_subgraphs(path_to_text, model, tau, wmd=False):
     
     with open(path_to_text, "r") as file:
         file = file.readlines()
@@ -219,20 +219,33 @@ def segmentize_bipartite_subgraphs(path_to_text, model, tau):
     tokens = []
     m = Mystem()
     print("Lemmatizing sentences")
-    for sent in tqdm(sents):
+    for sent in sents:
         t = [_.text for _ in tokenize(sent)]
         lemmas = []
         for token in t:
             lemma = lemmatize(token, morph=m)
-            if lemma != "":
+            if lemma != "" and lemma not in stop_words:
                 lemmas.append(lemma)
         tokens.append(lemmas)
     
+    sents_indexes = [i for i in range(len(sents))]
+
+    if wmd == True:
+        sent_pairs = get_sent_pairs(tokens)
+        wmd_distances = {(i, i+1):model.wmdistance(pair[0], pair[1]) for i,pair in enumerate(sent_pairs)}
+        pred_segment_indices = get_segments(tau=tau, sent_indexes=sents_indexes, sr_dict = wmd_distances, wmd=True)
+        pred_paragraphs = [sents[block[0]:block[-1]+1] for block in pred_segment_indices]
+        return wmd_distances, sents, real_paragraphs, pred_segment_indices, pred_paragraphs
+    
+        
+#    freq_dict = read_freqs("1grams-3.txt")
+#    freqs = freq_sums(freq_dict, morph=Mystem())
+    freqs = joblib.load("freqs.pkl")
+
     emb_dicts = get_embedding_dicts(tokens, model=model)
     dict_pairs = get_sent_pairs(emb_dicts)
     aligned_sents = get_optimal_alignment(dict_pairs, model=model)
     sr = sr_scores(aligned_sents, model=model, freq_sums=freqs)
-    sents_indexes = [i for i in range(len(sents))]
     sr_dict = {tuple(i):j for i,j in zip(get_sent_pairs(sents_indexes), sr)}
     pred_segment_indices = get_segments(tau=tau, sent_indexes=sents_indexes, sr_dict=sr_dict)
     pred_paragraphs = [sents[block[0]:block[-1]+1] for block in pred_segment_indices]
@@ -241,9 +254,7 @@ def segmentize_bipartite_subgraphs(path_to_text, model, tau):
 
 
 def segmentize_by_clustering(path_to_text, model):  
-    
-    freqs = joblib.load("freqs.pkl")
-    
+        
     with open(path_to_text, "r") as file:
         file = file.readlines()
         
@@ -259,7 +270,7 @@ def segmentize_by_clustering(path_to_text, model):
     tokens = []
     m = Mystem()
     print("Lemmatizing sentences")
-    for sent in tqdm(sents):
+    for sent in sents:
         t = [_.text for _ in tokenize(sent)]
         lemmas = []
         for token in t:
